@@ -1,0 +1,21 @@
+# ============================================================
+# Dependencias do ETL GMV
+# Compativel com Python 3.12+
+# ============================================================
+ 
+# Snowflake 
+snowflake-snowpark-python==1.27.0
+snowflake-sqlalchemy
+ 
+# Qualidade de dados
+# jsonschema < 4.18 evita o bug do rfc3987_syntax + lark (KeyboardInterrupt no import)
+great-expectations==0.18.22
+jsonschema==4.17.3
+ 
+# Utilitarios
+python-dotenv==1.0.1
+pandas
+ 
+# Geracao de dados fake (desenvolvimento/testes)
+factory-boy
+Faker
