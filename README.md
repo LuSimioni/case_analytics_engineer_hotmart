@@ -34,7 +34,7 @@ GROUP BY producer_id
 ORDER BY total_value DESC
 LIMIT 50;
 ```
-![alt text](image-3.png)
+![alt text](screenshots/image-3.png)
 
 **Pergunta 2 — Top 2 produtos por produtor:**
 
@@ -62,7 +62,7 @@ FROM ranked_products
 WHERE rn <= 2
 ORDER BY producer_id, total_revenue DESC;
 ```
-![alt text](image-4.png)
+![alt text](screenshots/image-4.png)
 
 **Decisão de filtro:** `release_date IS NOT NULL` o campo `purchase_status` foi gerado randomicamente e nem sempre reflete o estado real da compra, então a única forma confiável de identificar pagamento confirmado é pela existência do `release_date`.
 
@@ -203,7 +203,7 @@ E gera duas linhas para cada `CHANGED` (uma `CLOSE` na versão antiga e uma `OPE
 
 ### Orquestração Airflow
 
-![alt text](image-6.png)
+![alt text](screenshots/image-6.png)
 
 ### Estrutura do repositório
 
@@ -252,7 +252,7 @@ GROUP BY purchase_id, valid_from
 HAVING COUNT(*) > 1;
 -- esperado: 0 linhas ✅
 ```
-![alt text](image.png)
+![alt text](screenshots/image.png)
 
 ### Teste 2 — Rastreabilidade da purchase 55
 
@@ -266,7 +266,7 @@ WHERE purchase_id = 55
 ORDER BY valid_from;
 -- esperado: 4 versões com is_current=TRUE apenas na última ✅
 ```
-![alt text](image-1.png)
+![alt text](screenshots/image-1.png)
 
 ### Teste 3 — Navegação temporal
 
@@ -287,7 +287,7 @@ WHERE order_date BETWEEN '2023-01-01' AND '2023-01-31'
   AND is_current = TRUE;
 -- esperado: 50 em 31/03 | 80 hoje ✅
 ```
-![alt text](image-2.png)
+![alt text](screenshots/image-2.png)
 
 
 ### Consulta final — GMV diário por subsidiária
@@ -330,7 +330,7 @@ FROM ANALYTICS.EVENTS_HOTMART.v_gmv_current
 GROUP BY release_date, subsidiary
 ORDER BY release_date DESC, subsidiary;
 ```
-![alt text](image-5.png)
+![alt text](screenshots/image-5.png)
 
 
 ---
