@@ -10,9 +10,10 @@ Pipeline para calcular o **GMV diário por subsidiária** a partir de eventos tr
 2. [Exercício 2 — Pipeline GMV Histórico](#exercício-2--pipeline-gmv-histórico)
 3. [Decisões Técnicas](#decisões-técnicas)
 4. [Estrutura do Projeto](#estrutura-do-projeto)
-5. [Testes de Validação](#testes-de-validação)
-6. [Como Rodar](#como-rodar)
-7. [Tech stack](#7-tech-stack)
+5. [Qualidade de Dados com Great Expectations](#qualidade-de-dados-com-great-expectations)
+6. [Testes de Validação](#testes-de-validação)
+7. [Como Rodar](#como-rodar)
+8. [Tech Stack](#tech-stack)
 
 ---
 
@@ -129,6 +130,7 @@ Três tabelas de eventos append-only (CDC), com chegada assíncrona:
 │  Sem SQL complexo: SELECT * FROM v_gmv_current              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
 ### Query gmv_hist.sql
 
 ```sql
@@ -351,16 +353,52 @@ analytics_engineer_hotmart/
 └── .env                              # credenciais Snowflake
 ```
 
-### Expectations principais
+---
+
+## Qualidade de Dados com Great Expectations
+
+Great Expectations é uma biblioteca Python que permite definir **regras de qualidade** sobre os dados e gerar relatórios HTML automáticos. O pipeline valida as fontes **antes** do ETL e a tabela final **depois** — se qualquer validação falhar, o pipeline aborta.
+
+```
+Fontes CDC → [GX valida] → ETL MERGE SCD2 → gmv_hist → [GX valida] → Data Docs HTML
+```
+
+Cada tabela tem uma **suite de expectations** com regras específicas:
+
+| Tipo de regra | Exemplo | O que detecta |
+|---|---|---|
+| `not_be_null` | `purchase_id`, `valid_from` | Campos obrigatórios vazios |
+| `be_between` | `purchase_total_value >= 0` | Valores negativos ou absurdos |
+| `be_in_set` | `subsidiary ∈ {nacional, internacional}` | Valores fora do domínio |
+| `row_count >= 1` | Todas as tabelas | Tabela vazia |
+
+**Expectations por tabela:**
 
 | Tabela | Regras |
 |---|---|
-| `purchase` | `purchase_id` not null > 0; `purchase_status` ∈ {INICIADA, APROVADA, CANCELADA, REEMBOLSADA}; `purchase_total_value` ≥ 0 |
+| `purchase` | `purchase_id` not null > 0; `purchase_status` ∈ {INICIADA, APROVADA, CANCELADA, REEMBOLSADA} (mostly 0.95); `purchase_total_value` ≥ 0 |
 | `product_item` | `prod_item_id` not null > 0; `item_quantity` ≥ 1; `purchase_value` ≥ 0 |
-| `purchase_extra_info` | `subsidiary` ∈ {nacional, internacional} (mostly 0.90 — chegada assíncrona) |
+| `purchase_extra_info` | `subsidiary` {nacional, internacional} (mostly 0.90 — chegada assíncrona) |
 | `gmv_hist` | PK `(purchase_id, valid_from)` única; `is_current` ∈ {TRUE, FALSE}; `valid_from` ≥ 2020-01-01 |
 
-O `mostly=0.90` em `subsidiary` reflete a realidade de CDC: o dado pode chegar dias depois do evento de compra.
+**Por que `mostly` em algumas regras?**
+
+Campos como `subsidiary` usam `mostly=0.90` porque os dados chegam via CDC de forma assíncrona uma compra pode ser criada hoje e ter a subsidiária informada só daqui a 3 dias. Exigir 100% causaria falsos positivos diários.
+
+**Exemplo de falha detectada:**
+
+Durante o desenvolvimento, uma expectation customizada identificou uma inconsistência no controle do `is_current`. A query abaixo detecta compras cuja versão mais recente não está marcada como `is_current = TRUE` o que indicaria corrupção no histórico SCD2:
+
+```sql
+SELECT purchase_id
+FROM EVENTS_HOTMART.gmv_hist
+GROUP BY purchase_id
+HAVING MAX(valid_from) != MAX(CASE WHEN is_current THEN valid_from END)
+```
+
+O GX gerou o relatório abaixo apontando exatamente qual regra falhou, a causa foi identificada e corrigida no MERGE antes de entregar o pipeline:
+
+![GX falha detectada](screenshots/gx_falha.png)
 
 ---
 
@@ -412,14 +450,13 @@ WHERE order_date BETWEEN '2023-01-01' AND '2023-01-31'
 ```
 ![alt text](screenshots/image-2.png)
 
-
 ### Consulta final — GMV diário por subsidiária
 
-Para simplificar o consumo analítico por usuários que não possuem conhecimento avançado em SQL ou em modelagem temporal, foi criada a view v_gmv_current, que expõe apenas o estado atual e válido das compras.
+Para simplificar o consumo analítico por usuários que não possuem conhecimento avançado em SQL ou em modelagem temporal, foi criada a view `v_gmv_current`, que expõe apenas o estado atual e válido das compras.
 
-A view considera apenas registros ativos (is_current = TRUE);
-considera apenas compras efetivadas (release_date IS NOT NULL), seguindo a definição de GMV;
-abstrai a complexidade da lógica histórica da tabela SCD2.
+- Considera apenas registros ativos (`is_current = TRUE`)
+- Considera apenas compras efetivadas (`release_date IS NOT NULL`), seguindo a definição de GMV
+- Abstrai a complexidade da lógica histórica da tabela SCD2
 
 ```sql
 CREATE OR REPLACE VIEW ANALYTICS.EVENTS_HOTMART.v_gmv_current AS
@@ -441,7 +478,7 @@ WHERE is_current      = TRUE
   AND release_date    IS NOT NULL;
 ```
 
-Query Analítica:
+Query analítica:
 
 ```sql
 SELECT
@@ -454,7 +491,6 @@ GROUP BY release_date, subsidiary
 ORDER BY release_date DESC, subsidiary;
 ```
 ![alt text](screenshots/image-5.png)
-
 
 ---
 
@@ -510,7 +546,7 @@ Acesse `http://localhost:8080` (admin / admin) e dispare a DAG `gmv_hist_pipelin
 
 ---
 
-### 7. Tech stack
+## Tech Stack
 
 | Camada | Tecnologia | Por quê |
 |---|---|---|
@@ -519,8 +555,10 @@ Acesse `http://localhost:8080` (admin / admin) e dispare a DAG `gmv_hist_pipelin
 | **Conector** | Snowpark | Session bem comportada, suporta DataFrame API se o pipeline crescer |
 | **DQ** | Great Expectations | Suites versionáveis em Git, Data Docs HTML auditáveis |
 | **Configuração** | python-dotenv | Credenciais fora do código, padrão 12-factor |
-| **Orquestração** | Airflow / Prefect / Dagster (sugerido) | DAG diário em D-1, retries, alertas |
+| **Orquestração** | Airflow (Docker) | DAG diário em D-1, retries, alertas |
+| **CI** | GitHub Actions | Lint, validação de SQL e estrutura a cada push na `main` |
 | **Versionamento** | Git + PR review | Toda mudança em SQL passa por code review |
 
+---
 
 **Autora:** Luciana Simioni

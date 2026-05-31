@@ -19,8 +19,7 @@ datasources:
     execution_engine:
       class_name: SqlAlchemyExecutionEngine
       module_name: great_expectations.execution_engine
-      connection_string:
-        snowflake://LUSIMIONI:!Justsnowflake07@GWNCQGQ-KA89880/ANALYTICS/EVENTS_HOTMART?warehouse=TRANSFORMING&role=ACCOUNTADMIN
+      connection_string: "snowflake://${SNOWFLAKE_USER}:${SNOWFLAKE_PASSWORD}@${SNOWFLAKE_ACCOUNT}/${SNOWFLAKE_DATABASE}/${SNOWFLAKE_SCHEMA}?warehouse=${SNOWFLAKE_WAREHOUSE}&role=${SNOWFLAKE_ROLE}"
     data_connectors:
       configured_connector:
         class_name: ConfiguredAssetSqlDataConnector
