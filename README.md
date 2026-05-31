@@ -357,7 +357,7 @@ analytics_engineer_hotmart/
 
 ## Qualidade de Dados com Great Expectations
 
-Great Expectations é uma biblioteca Python que permite definir **regras de qualidade** sobre os dados e gerar relatórios HTML automáticos. O pipeline valida as fontes **antes** do ETL e a tabela final **depois** — se qualquer validação falhar, o pipeline aborta.
+Great Expectations é uma biblioteca Python que permite definir **regras de qualidade** sobre os dados e gerar relatórios HTML automáticos. O pipeline valida as fontes **antes** do ETL e a tabela final **depois** se qualquer validação falhar, o pipeline aborta.
 
 ```
 Fontes CDC → [GX valida] → ETL MERGE SCD2 → gmv_hist → [GX valida] → Data Docs HTML
@@ -378,7 +378,7 @@ Cada tabela tem uma **suite de expectations** com regras específicas:
 |---|---|
 | `purchase` | `purchase_id` not null > 0; `purchase_status` ∈ {INICIADA, APROVADA, CANCELADA, REEMBOLSADA} (mostly 0.95); `purchase_total_value` ≥ 0 |
 | `product_item` | `prod_item_id` not null > 0; `item_quantity` ≥ 1; `purchase_value` ≥ 0 |
-| `purchase_extra_info` | `subsidiary` {nacional, internacional} (mostly 0.90 — chegada assíncrona) |
+| `purchase_extra_info` | `subsidiary` {nacional, internacional} (mostly 0.90 chegada assíncrona) |
 | `gmv_hist` | PK `(purchase_id, valid_from)` única; `is_current` ∈ {TRUE, FALSE}; `valid_from` ≥ 2020-01-01 |
 
 **Por que `mostly` em algumas regras?**
