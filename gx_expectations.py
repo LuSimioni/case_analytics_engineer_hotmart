@@ -1,7 +1,12 @@
 import great_expectations as gx
 from great_expectations.core.batch import BatchRequest
+from datetime import date
+from dotenv import load_dotenv
+
+load_dotenv()
 
 context = gx.get_context(context_root_dir="gx")
+import expect_query_result_to_be_empty  
 DATASOURCE = "snowflake_hotmart"
 CONNECTOR  = "configured_connector"
 
@@ -109,7 +114,63 @@ v.expect_column_values_to_be_in_set(
 v.expect_column_values_to_be_between(
     "valid_from",
     min_value="2020-01-01",
+    max_value=str(date.today()),
     parse_strings_as_datetimes=True,
 )
+v.expect_column_values_to_not_be_null("product_id", mostly=0.99)
+
+v.expect_query_result_to_be_empty(query="""
+SELECT purchase_id
+FROM EVENTS_HOTMART.gmv_hist
+GROUP BY purchase_id
+HAVING COUNT_IF(is_current = TRUE) <> 1
+""")
+
+v.expect_query_result_to_be_empty(query="""
+SELECT *
+FROM EVENTS_HOTMART.gmv_hist
+WHERE valid_from > valid_to
+  AND valid_from IS NOT NULL
+  AND valid_to IS NOT NULL
+""")
+
+v.expect_query_result_to_be_empty(query="""
+SELECT *
+FROM EVENTS_HOTMART.gmv_hist
+WHERE is_current = TRUE
+AND valid_to IS NOT NULL
+""")
+
+v.expect_query_result_to_be_empty(query="""
+SELECT *
+FROM EVENTS_HOTMART.gmv_hist
+WHERE is_current = FALSE
+AND valid_to IS NULL
+""")
+
+v.expect_query_result_to_be_empty(query="""
+SELECT a.purchase_id
+FROM EVENTS_HOTMART.gmv_hist a
+JOIN EVENTS_HOTMART.gmv_hist b
+    ON a.purchase_id = b.purchase_id
+   AND a.valid_from < COALESCE(b.valid_to, '9999-12-31')
+   AND COALESCE(a.valid_to, '9999-12-31') > b.valid_from
+   AND a.valid_from <> b.valid_from
+""")
+
+v.expect_query_result_to_be_empty(query="""
+SELECT purchase_id
+FROM EVENTS_HOTMART.gmv_hist
+GROUP BY purchase_id
+HAVING MAX(valid_from) != MAX(CASE WHEN is_current THEN valid_from END)
+""")
+
+v.expect_query_result_to_be_empty(query="""
+SELECT purchase_id, valid_from
+FROM EVENTS_HOTMART.gmv_hist
+GROUP BY purchase_id, valid_from
+HAVING COUNT(*) > 1
+""")
+
 
 save(v)

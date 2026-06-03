@@ -10,6 +10,8 @@ import great_expectations as gx
 
 load_dotenv()
 
+_gx_context = gx.get_context(context_root_dir="gx")
+import expect_query_result_to_be_empty  # noqa: E402 — must come after get_context adds plugins/ to sys.path
 
 YESTERDAY = date.today() - timedelta(days=1)
 SCHEMA    = os.environ.get("SNOWFLAKE_SCHEMA", "events_hotmart").upper()
@@ -48,9 +50,21 @@ def merge_scd2(session: Session, ref_date: date) -> None:
 
 
 def validate(table: str) -> bool:
-    result = gx.get_context(context_root_dir="gx").run_checkpoint(checkpoint_name=f"checkpoint_{table}")
+    result = _gx_context.run_checkpoint(checkpoint_name=f"checkpoint_{table}")
     if not result["success"]:
         print(f"[GX] FALHOU: {table.upper()}")
+        for _, val_result in result.run_results.items():
+            for exp_result in val_result["validation_result"].results:
+                if not exp_result.success:
+                    cfg = exp_result.expectation_config
+                    print(f"  ✗ {cfg.expectation_type}")
+                    if "query" in cfg.kwargs:
+                        print(f"    query: {cfg.kwargs['query'].strip()}")
+                    rows = exp_result.result.get("unexpected_rows") or []
+                    if rows:
+                        print(f"    linhas inesperadas ({len(rows)}):")
+                        for r in rows:
+                            print(f"      {r}")
     return result["success"]
 
 
@@ -70,7 +84,7 @@ def main(ref_date: date = YESTERDAY) -> None:
         if not validate("gmv_hist"):
             sys.exit("[GMV] gmv_hist inválido.")
 
-    gx.get_context(context_root_dir="gx").build_data_docs()
+    _gx_context.build_data_docs()
     print("[GMV] Concluído — gx/uncommitted/data_docs/local_site/index.html")
 
 
